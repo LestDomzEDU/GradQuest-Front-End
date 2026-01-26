@@ -1,27 +1,47 @@
 // src/lib/api.js
+import { Platform } from "react-native";
 
-// Your deployed backend (Heroku)
-const BASE_URL = "https://grad-quest-app-2cac63f2b9b2.herokuapp.com";
+/**
+ * Base URL for the backend.
+ *
+ * Local development:
+ * - Web on same machine: http://localhost:8081
+ * - Phone / Expo Go: http://<YOUR_LAN_IP>:8081
+ *
+ * Set via PowerShell:
+ *   $env:EXPO_PUBLIC_API_BASE_URL="http://localhost:8081"
+ * or
+ *   $env:EXPO_PUBLIC_API_BASE_URL="http://192.168.1.50:8081"
+ */
+const ENV_BASE =
+  (typeof process !== "undefined" &&
+    process.env &&
+    process.env.EXPO_PUBLIC_API_BASE_URL) ||
+  "";
 
-// All API endpoints used across the app
+// Fallback if env var is not set
+const DEFAULT_BASE = "http://localhost:8081";
+
+// Final backend base URL
+const BASE_URL = ENV_BASE && ENV_BASE.trim()
+  ? ENV_BASE.trim()
+  : DEFAULT_BASE;
+
+// Centralized API endpoints
 const API = {
-  // --- OAuth2 login endpoints ---
-  // Spring Security exposes these automatically for each provider:
+  // ---- OAuth login endpoints (Spring Security defaults) ----
   LOGIN_GITHUB: `${BASE_URL}/oauth2/authorization/github`,
   LOGIN_DISCORD: `${BASE_URL}/oauth2/authorization/discord`,
 
-  // Called by OAuthScreen after the provider redirects back
+  // Backend OAuth success handler
   OAUTH_FINAL: `${BASE_URL}/oauth2/final`,
 
-  // --- User session endpoints ---
+  // ---- Session / user endpoints ----
   ME: `${BASE_URL}/api/me`,
-  LOGOUT: `${BASE_URL}/logout`,
+  LOGOUT: `${BASE_URL}/api/logout`,
 
-  // --- Your existing API routes (if needed throughout the app) ---
+  // ---- Base ----
   BASE: BASE_URL,
-
-  // If you later add more routes, follow this pattern:
-  // EXAMPLE: `${BASE_URL}/api/something`
 };
 
 export default API;

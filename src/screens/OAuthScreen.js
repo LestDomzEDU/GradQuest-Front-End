@@ -58,6 +58,9 @@ export default function OAuthScreen() {
   // For web polling after redirect
   const webPollRef = React.useRef(null);
 
+  // Prevent double-navigation loops
+  const didRedirectRef = React.useRef(false);
+
   // Load /api/me and update state
   const loadMe = React.useCallback(async () => {
     try {
@@ -73,7 +76,6 @@ export default function OAuthScreen() {
     }
   }, []);
 
-  // Cleanup only (no auto-login check on mount)
   React.useEffect(() => {
     return () => {
       if (webPollRef.current) {
@@ -94,7 +96,35 @@ export default function OAuthScreen() {
       ? "Discord"
       : "your account";
 
-  // When user taps "Continue to dashboard"
+  // ✅ This is the correct navigation target for this project:
+  // Stack route "Tabs" -> tab screen "Dashboard"
+  const goToDashboardTabs = React.useCallback(() => {
+    didRedirectRef.current = true;
+
+    navigation.reset({
+      index: 0,
+      routes: [
+        {
+          name: "Tabs",
+          params: {
+            screen: "Dashboard",
+            params: { showTutorial: true },
+          },
+        },
+      ],
+    });
+  }, [navigation]);
+
+  // ✅ Auto-redirect after login is confirmed (no button required)
+  React.useEffect(() => {
+    if (didRedirectRef.current) return;
+
+    // Only redirect after we are authenticated AND we are not inside the WebView anymore
+    if (isAuthed && !showWeb) {
+      goToDashboardTabs();
+    }
+  }, [isAuthed, showWeb, goToDashboardTabs]);
+
   const onContinue = React.useCallback(async () => {
     try {
       await AsyncStorage.removeItem(TUTORIAL_KEY);
@@ -102,11 +132,9 @@ export default function OAuthScreen() {
       // ignore
     }
 
-    navigation.navigate("Tabs", {
-      screen: "Dashboard",
-      params: { showTutorial: true },
-    });
-  }, [navigation]);
+    // Keep the project's intended navigation path
+    goToDashboardTabs();
+  }, [goToDashboardTabs]);
 
   // Start login: platform-specific behavior
   const startLogin = React.useCallback(
@@ -117,7 +145,8 @@ export default function OAuthScreen() {
       // Remember which provider we are trying to use NOW
       setCurrentProvider(provider);
 
-      // Reset any previous auth state in the UI
+      // Reset redirect guard + any previous auth state
+      didRedirectRef.current = false;
       setMe(null);
       setShowWeb(false);
 
@@ -153,6 +182,7 @@ export default function OAuthScreen() {
             webPollRef.current = null;
             setLoading(false);
             setShowWeb(false);
+            // ✅ the useEffect above will auto-redirect to Tabs/Dashboard
             return;
           }
 
@@ -178,6 +208,8 @@ export default function OAuthScreen() {
   const onWebNav = React.useCallback(
     async (navState) => {
       const url = navState?.url || "";
+
+      // When backend redirects to /oauth2/final, treat it as "login complete"
       if (url.startsWith(API.OAUTH_FINAL)) {
         setLoading(true);
         try {
@@ -186,6 +218,7 @@ export default function OAuthScreen() {
         } finally {
           setLoading(false);
           setShowWeb(false);
+          // ✅ once showWeb is false and me is authenticated, useEffect redirects to Tabs/Dashboard
         }
       }
     },
@@ -255,7 +288,7 @@ export default function OAuthScreen() {
           <ActivityIndicator size="large" style={{ marginTop: 20 }} />
         )}
 
-        {/* After successful login: show confirmation + continue button */}
+        {/* After successful login: usually redirects immediately now */}
         {isAuthed && !showWeb && (
           <View style={styles.card}>
             {avatarUri && (
@@ -264,9 +297,10 @@ export default function OAuthScreen() {
             <Text style={styles.title}>You’re signed in</Text>
 
             <Text style={styles.sub}>
-              Signed in with {providerLabel}. Continue to your dashboard.
+              Signed in with {providerLabel}. Redirecting...
             </Text>
 
+            {/* fallback button */}
             <Pressable
               onPress={onContinue}
               style={({ pressed }) => [
@@ -274,7 +308,7 @@ export default function OAuthScreen() {
                 pressed && { opacity: 0.9 },
               ]}
             >
-              <Text style={styles.primaryBtnText}>Continue to dashboard</Text>
+              <Text style={styles.primaryBtnText}>Continue</Text>
             </Pressable>
           </View>
         )}
@@ -308,137 +342,103 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: PALETTE.white,
   },
-
   header: {
-    paddingTop: 40,
-    paddingBottom: 10,
     paddingHorizontal: 20,
-    backgroundColor: PALETTE.white,
+    paddingTop: 6,
+    paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-
-  headerAccent: {
-    height: 4,
-    backgroundColor: PALETTE.gold,
-    width: "100%",
-  },
-
   headerTitle: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: "800",
     color: PALETTE.blueDark,
   },
-
   logo: {
-    width: 72,
-    height: 72,
+    width: 36,
+    height: 36,
     resizeMode: "contain",
   },
-
+  headerAccent: {
+    height: 6,
+    backgroundColor: PALETTE.blueDark,
+  },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
-    justifyContent: "center",
-    marginTop: -100,
+    padding: 18,
   },
-
   card: {
-    width: "100%",
-    backgroundColor: PALETTE.white,
+    backgroundColor: PALETTE.blueSoft,
     borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 22,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 10,
-    elevation: 4,
+    padding: 18,
   },
-
   title: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 6,
-    textAlign: "center",
+    fontSize: 22,
+    fontWeight: "900",
     color: PALETTE.blueDark,
+    marginBottom: 8,
   },
-
   sub: {
     fontSize: 14,
     color: PALETTE.grayText,
-    marginBottom: 4,
-    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 16,
   },
-
   subLabel: {
-    fontSize: 13,
-    color: PALETTE.grayText,
-    marginBottom: 14,
-    textAlign: "center",
-  },
-
-  oauthBtn: {
-    width: "100%",
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
+    fontSize: 14,
+    fontWeight: "800",
+    color: PALETTE.blueDark,
     marginBottom: 10,
   },
-
+  oauthBtn: {
+    height: 52,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   githubBtn: {
     backgroundColor: PALETTE.githubBg,
   },
-
   discordBtn: {
     backgroundColor: PALETTE.discordBg,
   },
-
   horizontalLogo: {
-    width: "70%",
+    width: 200,
     height: 28,
     resizeMode: "contain",
   },
-
   orText: {
     textAlign: "center",
+    marginVertical: 12,
     color: PALETTE.grayText,
-    fontSize: 12,
-    marginVertical: 6,
+    fontWeight: "700",
   },
-
+  primaryBtn: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: PALETTE.blueDark,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 10,
+  },
+  primaryBtnText: {
+    color: PALETTE.white,
+    fontWeight: "900",
+  },
   avatar: {
     width: 64,
     height: 64,
     borderRadius: 32,
     marginBottom: 12,
     alignSelf: "center",
-    backgroundColor: "#eeeeee",
   },
-
-  primaryBtn: {
-    marginTop: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: 12,
-    backgroundColor: PALETTE.blue,
-    alignItems: "center",
-  },
-
-  primaryBtnText: {
-    color: PALETTE.white,
-    fontWeight: "700",
-    fontSize: 15,
-  },
-
   webContainer: {
     flex: 1,
-    marginTop: 8,
+    marginTop: 14,
     borderRadius: 16,
     overflow: "hidden",
-    backgroundColor: PALETTE.blueSoft,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
   },
 });
