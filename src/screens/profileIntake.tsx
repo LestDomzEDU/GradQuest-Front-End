@@ -264,8 +264,8 @@ export default function ProfileIntake() {
                 raw.schoolType === "PRIVATE"
                   ? true
                   : raw.schoolType === "PUBLIC"
-                  ? false
-                  : null
+                    ? false
+                    : null,
               );
             }
             if (raw.state) setStateLocation(raw.state);
@@ -282,7 +282,7 @@ export default function ProfileIntake() {
 
             if (raw.enrollmentType)
               setTimeType(
-                raw.enrollmentType === "FULL_TIME" ? "Full-time" : "Part-time"
+                raw.enrollmentType === "FULL_TIME" ? "Full-time" : "Part-time",
               );
 
             if (raw.modality)
@@ -290,8 +290,8 @@ export default function ProfileIntake() {
                 raw.modality === "IN_PERSON"
                   ? "In person"
                   : raw.modality === "HYBRID"
-                  ? "Hybrid"
-                  : "Online"
+                    ? "Hybrid"
+                    : "Online",
               );
 
             if (raw.gpa !== undefined && raw.gpa !== null) {
@@ -359,15 +359,15 @@ export default function ProfileIntake() {
           format === "In person"
             ? "IN_PERSON"
             : format === "Hybrid"
-            ? "HYBRID"
-            : "ONLINE",
+              ? "HYBRID"
+              : "ONLINE",
         gpa: finalGpa,
         requirementType: capstone ? "CAPSTONE" : "NEITHER",
       };
 
       console.log(
         "Sending preferences payload:",
-        JSON.stringify(prefPayload, null, 2)
+        JSON.stringify(prefPayload, null, 2),
       );
 
       const saveUrl = `${API.BASE}/api/preferences?userId=${userIdNum}`;
@@ -382,7 +382,9 @@ export default function ProfileIntake() {
       if (!saveRes.ok) {
         const text = await saveRes.text().catch(() => "");
         console.error("Backend response:", saveRes.status, text);
-        throw new Error(`Failed to save preferences: ${saveRes.status} ${text}`);
+        throw new Error(
+          `Failed to save preferences: ${saveRes.status} ${text}`,
+        );
       }
       let savedPrefs = null;
       try {
@@ -401,8 +403,8 @@ export default function ProfileIntake() {
           effective.schoolType === "PRIVATE"
             ? true
             : effective.schoolType === "PUBLIC"
-            ? false
-            : null
+              ? false
+              : null,
         );
       }
       if (effective.state) setStateLocation(effective.state);
@@ -419,7 +421,7 @@ export default function ProfileIntake() {
 
       if (effective.enrollmentType)
         setTimeType(
-          effective.enrollmentType === "FULL_TIME" ? "Full-time" : "Part-time"
+          effective.enrollmentType === "FULL_TIME" ? "Full-time" : "Part-time",
         );
 
       if (effective.modality)
@@ -427,8 +429,8 @@ export default function ProfileIntake() {
           effective.modality === "IN_PERSON"
             ? "In person"
             : effective.modality === "HYBRID"
-            ? "Hybrid"
-            : "Online"
+              ? "Hybrid"
+              : "Online",
         );
 
       if (effective.gpa !== undefined && effective.gpa !== null) {
@@ -457,7 +459,7 @@ export default function ProfileIntake() {
         if (!topRes.ok) {
           const text = await topRes.text().catch(() => "");
           throw new Error(
-            `Failed to fetch top schools: ${topRes.status} ${text}`
+            `Failed to fetch top schools: ${topRes.status} ${text}`,
           );
         }
         topSchools = await topRes.json();
@@ -548,7 +550,12 @@ export default function ProfileIntake() {
             onChange={setStateLocation}
           />
 
-          <MajorSelectField value={major} options={majorOptions} onChange={setMajor} />
+          <MajorSelectField
+            value={major}
+            options={majorOptions}
+            onChange={setMajor}
+            label={""}
+          />
 
           <View style={styles.inlineField}>
             <Text style={styles.label}>Capstone Required?</Text>
