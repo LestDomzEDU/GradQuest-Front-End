@@ -61,7 +61,7 @@ export default function OAuthScreen() {
   // Prevent double-navigation loops
   const didRedirectRef = React.useRef(false);
 
-  // Load /api/me and update state
+  // Load /api/me and update state (WEB only is reliable for cookies)
   const loadMe = React.useCallback(async () => {
     try {
       const res = await fetch(API.ME, { credentials: "include" });
@@ -139,8 +139,7 @@ export default function OAuthScreen() {
   // Start login: platform-specific behavior
   const startLogin = React.useCallback(
     async (provider) => {
-      const base =
-        provider === "github" ? API.LOGIN_GITHUB : API.LOGIN_DISCORD;
+      const base = provider === "github" ? API.LOGIN_GITHUB : API.LOGIN_DISCORD;
 
       // Remember which provider we are trying to use NOW
       setCurrentProvider(provider);
@@ -205,25 +204,17 @@ export default function OAuthScreen() {
   );
 
   // Native WebView navigation handler
-  const onWebNav = React.useCallback(
-    async (navState) => {
-      const url = navState?.url || "";
+  const onWebNav = React.useCallback((navState) => {
+    const url = navState?.url || "";
 
-      // When backend redirects to /oauth2/final, treat it as "login complete"
-      if (url.startsWith(API.OAUTH_FINAL)) {
-        setLoading(true);
-        try {
-          const data = await loadMe();
-          console.log("After native OAuth, ME =", data);
-        } finally {
-          setLoading(false);
-          setShowWeb(false);
-          // ✅ once showWeb is false and me is authenticated, useEffect redirects to Tabs/Dashboard
-        }
-      }
-    },
-    [loadMe]
-  );
+    // When backend redirects to /oauth2/final, the WebView is now on your server.
+    // At that moment, injectedJavaScript will call /api/me *inside the WebView*
+    // (where cookies definitely exist) and send the result back via postMessage.
+    if (url.startsWith(API.OAUTH_FINAL)) {
+      setLoading(true);
+      // Do NOT close the WebView here; wait for the onMessage handler to receive /api/me.
+    }
+  }, []);
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -247,85 +238,127 @@ export default function OAuthScreen() {
             <Text style={styles.sub}>
               Choose a provider to continue to your dashboard.
             </Text>
-            <Text style={styles.subLabel}>Sign in with:</Text>
 
-            {/* GitHub button */}
+            <View style={{ height: 18 }} />
+
             <Pressable
               onPress={() => startLogin("github")}
-              style={({ pressed }) => [
-                styles.oauthBtn,
-                styles.githubBtn,
-                pressed && { opacity: 0.9 },
-              ]}
+              style={[styles.providerBtn, { backgroundColor: PALETTE.githubBg }]}
             >
-              <Image
-                source={require("../../assets/github_horizontal.png")}
-                style={styles.horizontalLogo}
-              />
+              <Text style={[styles.providerText, { color: "#111" }]}>
+                GitHub
+              </Text>
             </Pressable>
 
-            <Text style={styles.orText}>--- or ---</Text>
+            <View style={{ height: 12 }} />
 
-            {/* Discord button */}
             <Pressable
               onPress={() => startLogin("discord")}
-              style={({ pressed }) => [
-                styles.oauthBtn,
-                styles.discordBtn,
-                pressed && { opacity: 0.9 },
-              ]}
+              style={[styles.providerBtn, { backgroundColor: PALETTE.discordBg }]}
             >
-              <Image
-                source={require("../../assets/discord_horizontal.png")}
-                style={styles.horizontalLogo}
-              />
+              <Text style={[styles.providerText, { color: "#fff" }]}>
+                Discord
+              </Text>
             </Pressable>
-          </View>
-        )}
 
-        {/* Loading spinner during web polling or native finalization */}
-        {loading && (
-          <ActivityIndicator size="large" style={{ marginTop: 20 }} />
-        )}
+            <View style={{ height: 16 }} />
 
-        {/* After successful login: usually redirects immediately now */}
-        {isAuthed && !showWeb && (
-          <View style={styles.card}>
-            {avatarUri && (
-              <Image source={{ uri: avatarUri }} style={styles.avatar} />
+            {loading && (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator />
+                <Text style={styles.loadingText}>Signing in…</Text>
+              </View>
             )}
-            <Text style={styles.title}>You’re signed in</Text>
-
-            <Text style={styles.sub}>
-              Signed in with {providerLabel}. Redirecting...
-            </Text>
-
-            {/* fallback button */}
-            <Pressable
-              onPress={onContinue}
-              style={({ pressed }) => [
-                styles.primaryBtn,
-                pressed && { opacity: 0.9 },
-              ]}
-            >
-              <Text style={styles.primaryBtnText}>Continue</Text>
-            </Pressable>
           </View>
         )}
 
-        {/* WebView for OAuth — native platforms only */}
-        {Platform.OS !== "web" && showWeb && loginUrl && (
-          <View style={styles.webContainer}>
+        {/* If inside WebView, show WebView */}
+        {showWeb && !!loginUrl && (
+          <View style={styles.webWrap}>
             <WebView
               key={webKey}
               source={{ uri: loginUrl }}
               originWhitelist={["*"]}
               javaScriptEnabled
+              domStorageEnabled
               sharedCookiesEnabled
               thirdPartyCookiesEnabled
+              incognito={false}
+              cacheEnabled
               onNavigationStateChange={onWebNav}
+              onMessage={(event) => {
+                try {
+                  const msg = JSON.parse(event?.nativeEvent?.data || "{}");
+                  if (msg?.type === "ME") {
+                    const payload = msg.payload || null;
+                    setMe(payload);
+
+                    // If we got a real authenticated response, close the WebView and continue
+                    if (looksAuthenticated(payload)) {
+                      setLoading(false);
+                      setShowWeb(false);
+                    } else {
+                      setLoading(false);
+                    }
+                  }
+                } catch (e) {
+                  // ignore
+                }
+              }}
+              injectedJavaScript={`
+                (function () {
+                  try {
+                    var href = String(window.location.href || "");
+                    var target = "${API.OAUTH_FINAL}";
+                    if (target && href.indexOf(target) === 0) {
+                      fetch("/api/me", { credentials: "include" })
+                        .then(function (r) { return r.json(); })
+                        .then(function (data) {
+                          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                            window.ReactNativeWebView.postMessage(JSON.stringify({ type: "ME", payload: data }));
+                          }
+                        })
+                        .catch(function () {});
+                    }
+                  } catch (e) {}
+                })();
+                true;
+              `}
               startInLoadingState
             />
+
+            {loading && (
+              <View style={styles.webOverlay}>
+                <ActivityIndicator />
+                <Text style={styles.loadingText}>Finishing sign-in…</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* If authenticated, show confirmation + continue */}
+        {isAuthed && !showWeb && (
+          <View style={styles.card}>
+            <Text style={styles.title}>Signed in</Text>
+            <Text style={styles.sub}>
+              You’re signed in with {providerLabel}.
+            </Text>
+
+            <View style={{ height: 14 }} />
+
+            {avatarUri ? (
+              <Image source={{ uri: avatarUri }} style={styles.avatar} />
+            ) : null}
+
+            <View style={{ height: 10 }} />
+
+            <Text style={styles.meText}>{me?.name || me?.login || ""}</Text>
+
+            <View style={{ height: 18 }} />
+
+            <Pressable onPress={onContinue} style={styles.continueBtn}>
+              <Text style={styles.continueText}>Continue</Text>
+            </Pressable>
           </View>
         )}
       </View>
@@ -333,27 +366,23 @@ export default function OAuthScreen() {
   );
 }
 
-/* ==============================
-   STYLES
-   ============================== */
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: PALETTE.white,
+    backgroundColor: "#fff",
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 14,
-    flexDirection: "row",
+    height: 54,
+    paddingHorizontal: 14,
     alignItems: "center",
+    flexDirection: "row",
     justifyContent: "space-between",
+    backgroundColor: "#fff",
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: "800",
-    color: PALETTE.blueDark,
+    fontWeight: "700",
+    color: "#0B1220",
   },
   logo: {
     width: 36,
@@ -361,84 +390,97 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
   },
   headerAccent: {
-    height: 6,
-    backgroundColor: PALETTE.blueDark,
+    height: 3,
+    backgroundColor: PALETTE.blue,
   },
   content: {
     flex: 1,
-    padding: 18,
+    padding: 16,
+    justifyContent: "center",
   },
   card: {
-    backgroundColor: PALETTE.blueSoft,
     borderRadius: 16,
+    backgroundColor: "#fff",
     padding: 18,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
   },
   title: {
     fontSize: 22,
-    fontWeight: "900",
-    color: PALETTE.blueDark,
-    marginBottom: 8,
+    fontWeight: "800",
+    color: "#0B1220",
   },
   sub: {
+    marginTop: 6,
     fontSize: 14,
     color: PALETTE.grayText,
     lineHeight: 20,
-    marginBottom: 16,
   },
-  subLabel: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: PALETTE.blueDark,
-    marginBottom: 10,
-  },
-  oauthBtn: {
-    height: 52,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  githubBtn: {
-    backgroundColor: PALETTE.githubBg,
-  },
-  discordBtn: {
-    backgroundColor: PALETTE.discordBg,
-  },
-  horizontalLogo: {
-    width: 200,
-    height: 28,
-    resizeMode: "contain",
-  },
-  orText: {
-    textAlign: "center",
-    marginVertical: 12,
-    color: PALETTE.grayText,
-    fontWeight: "700",
-  },
-  primaryBtn: {
+  providerBtn: {
     height: 48,
     borderRadius: 12,
-    backgroundColor: PALETTE.blueDark,
-    justifyContent: "center",
     alignItems: "center",
-    marginTop: 10,
+    justifyContent: "center",
   },
-  primaryBtnText: {
-    color: PALETTE.white,
-    fontWeight: "900",
+  providerText: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  loadingRow: {
+    marginTop: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: PALETTE.grayText,
+    marginLeft: 10,
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    marginBottom: 12,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     alignSelf: "center",
   },
-  webContainer: {
-    flex: 1,
-    marginTop: 14,
+  meText: {
+    textAlign: "center",
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0B1220",
+  },
+  continueBtn: {
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: PALETTE.blue,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  continueText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  webWrap: {
+    height: 520,
     borderRadius: 16,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#E5E7EB",
+  },
+  webOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    flexDirection: "row",
+    alignItems: "center",
   },
 });

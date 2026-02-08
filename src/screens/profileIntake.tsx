@@ -18,6 +18,9 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import type { NavigationProp } from "@react-navigation/native";
 import API from "../lib/api";
+import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { computeTop5SchoolsFromRows } from "../lib/schoolMatching";
+
 import { useAuth } from "../context/AuthContext";
 
 type RootNavParamList = {
@@ -35,41 +38,46 @@ interface SelectFieldProps {
 const SelectField: React.FC<SelectFieldProps> = ({
   label,
   value,
-  options = [],
+  options,
   onChange,
 }) => {
-  const [open, setOpen] = React.useState(false);
+  const [modalVisible, setModalVisible] = React.useState(false);
 
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity style={styles.select} onPress={() => setOpen(true)}>
-        <Text style={styles.selectText}>{value ?? "Select"}</Text>
+      <TouchableOpacity
+        style={styles.select}
+        onPress={() => setModalVisible(true)}
+      >
+        <Text style={styles.selectText}>{value || "Select..."}</Text>
       </TouchableOpacity>
 
-      <Modal visible={open} animationType="slide" transparent={true}>
+      <Modal transparent visible={modalVisible} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Select {label}</Text>
+            <Text style={styles.modalTitle}>{label}</Text>
             <FlatList
-              data={options}
-              keyExtractor={(item) => String(item)}
+              data={options || []}
+              keyExtractor={(item, idx) => `${item}-${idx}`}
               renderItem={({ item }) => (
-                <Pressable
+                <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => {
                     onChange(item);
-                    setOpen(false);
+                    setModalVisible(false);
                   }}
                 >
                   <Text style={styles.modalItemText}>{item}</Text>
-                </Pressable>
+                </TouchableOpacity>
               )}
             />
-
-            <Pressable style={styles.modalClose} onPress={() => setOpen(false)}>
+            <TouchableOpacity
+              style={styles.modalClose}
+              onPress={() => setModalVisible(false)}
+            >
               <Text style={styles.modalCloseText}>Close</Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -77,54 +85,72 @@ const SelectField: React.FC<SelectFieldProps> = ({
   );
 };
 
-const MajorSelectField = ({
+const MajorSelectField: React.FC<SelectFieldProps> = ({
+  label = "Major",
   value,
   options,
   onChange,
-}: {
-  value: string | null;
-  options: string[];
-  onChange: (v: string) => void;
 }) => {
-  const [open, setOpen] = React.useState(false);
+  const [modalVisible, setModalVisible] = React.useState(false);
+  const [searchText, setSearchText] = React.useState("");
+
+  const filtered = React.useMemo(() => {
+    const list = options || [];
+    if (!searchText.trim()) return list;
+    const q = searchText.trim().toLowerCase();
+    return list.filter((x) => String(x).toLowerCase().includes(q));
+  }, [options, searchText]);
 
   return (
     <View style={styles.field}>
-      {/* OUTSIDE LABEL */}
-      <Text style={styles.label}>Field / Major</Text>
-
-      {/* DROPDOWN BOX */}
-      <TouchableOpacity style={styles.select} onPress={() => setOpen(true)}>
-        <Text style={styles.selectText}>
-          {value && value.length > 0 ? value : "Choose your major"}
-        </Text>
+      <Text style={styles.label}>{label}</Text>
+      <TouchableOpacity
+        style={styles.select}
+        onPress={() => setModalVisible(true)}
+      >
+        <Text style={styles.selectText}>{value || "Select..."}</Text>
       </TouchableOpacity>
 
-      {/* MODAL LIST */}
-      <Modal visible={open} animationType="slide" transparent={true}>
+      <Modal transparent visible={modalVisible} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Select Field / Major</Text>
+            <Text style={styles.modalTitle}>{label}</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Search majors..."
+              value={searchText}
+              onChangeText={setSearchText}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
 
             <FlatList
-              data={options}
-              keyExtractor={(item) => item}
+              data={filtered}
+              keyExtractor={(item, idx) => `${item}-${idx}`}
+              keyboardShouldPersistTaps="always"
               renderItem={({ item }) => (
-                <Pressable
+                <TouchableOpacity
                   style={styles.modalItem}
                   onPress={() => {
                     onChange(item);
-                    setOpen(false);
+                    setSearchText("");
+                    setModalVisible(false);
                   }}
                 >
                   <Text style={styles.modalItemText}>{item}</Text>
-                </Pressable>
+                </TouchableOpacity>
               )}
             />
-
-            <Pressable style={styles.modalClose} onPress={() => setOpen(false)}>
+            <TouchableOpacity
+              style={styles.modalClose}
+              onPress={() => {
+                setSearchText("");
+                setModalVisible(false);
+              }}
+            >
               <Text style={styles.modalCloseText}>Close</Text>
-            </Pressable>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -133,15 +159,14 @@ const MajorSelectField = ({
 };
 
 export default function ProfileIntake() {
-  const { me, refresh } = useAuth(); // me may be null until auth finishes
-  // console.log("Auth user me:", me);
+  const navigation = useNavigation<NavigationProp<RootNavParamList>>();
+  const { me, refresh } = useAuth();
 
-  const navigation = useNavigation() as NavigationProp<RootNavParamList>;
+  const [budget, setBudget] = React.useState<number>(0);
+  const [budgetText, setBudgetText] = React.useState<string>("");
 
-  const [budget, setBudget] = React.useState<number>(30000);
-  const [budgetText, setBudgetText] = React.useState<string>(String(30000));
-  const [gpa, setGpa] = React.useState<number>(3.5);
-  const [gpaText, setGpaText] = React.useState<string>(String(3.5));
+  const [gpa, setGpa] = React.useState<number>(0);
+  const [gpaText, setGpaText] = React.useState<string>("");
 
   const [country, setCountry] = React.useState<string | null>(null);
   const [applyYear, setApplyYear] = React.useState<string>("2026");
@@ -168,10 +193,6 @@ export default function ProfileIntake() {
   const formatOptions = ["In person", "Hybrid", "Online"];
   const majorOptions = ["Math", "English", "Computer Science"];
 
-  // When running under Jest tests, render a simplified version that avoids
-  // native modal/keyboard/scroll behaviour which can be problematic in
-  // the test renderer environment. This keeps tests fast and stable while
-  // preserving full UI at runtime.
   const isTest = typeof process !== "undefined" && !!process.env.JEST_WORKER_ID;
   if (isTest) {
     return (
@@ -199,40 +220,12 @@ export default function ProfileIntake() {
     );
   }
 
-  // function handleSubmit() {
-  //   // Make sure we parse the latest text fields before submit:
-  //   const parsedBudget = parseFloat(budgetText);
-  //   const parsedGpa = parseFloat(gpaText);
-  //   setBudget(Number.isFinite(parsedBudget) ? parsedBudget : 0);
-  //   setGpa(Number.isFinite(parsedGpa) ? parsedGpa : 0);
-  //   // use the numeric values (or read them from budget/gpa after setState if needed)
-  //   const profile = {
-  //     country,
-  //     budget: Number.isFinite(parsedBudget) ? parsedBudget : 0,
-  //     /* ... other fields ... */
-  //     gpa: Number.isFinite(parsedGpa) ? parsedGpa : 0,
-  //   };
-  //   console.log("Profile submitted:", profile);
-  //   navigation.navigate("Tabs");
-  // }
-
-  //Takes me back to dashboard
-
-  // // when i click dashboard, the profile info from when the profile is like before isnt there cux its saying no matches
-  // function dashboardButton() {
-  //   // pass in the top schools parms so that the dashboafd reflwcts what it has
-
-  //   navigation.navigate("Tabs", { screen: "Dashboard" });
-  // }
-
   const [submitting, setSubmitting] = React.useState(false);
 
-  // Prefill form from saved preferences (if present on the server)
   React.useEffect(() => {
     let mounted = true;
     const loadPrefs = async () => {
       try {
-        // Ensure we have latest auth info
         let currentMe = me;
         if (
           (!currentMe || !currentMe.authenticated) &&
@@ -240,14 +233,11 @@ export default function ProfileIntake() {
         ) {
           try {
             currentMe = await refresh();
-          } catch (e) {
-            // ignore
-          }
+          } catch (e) {}
         }
         const userId = currentMe?.userId || currentMe?.id;
         if (!userId) return;
 
-        // Try both common query variations; backend might expect userId or studentId
         const tryUrls = [
           `${API.BASE}/api/preferences?userId=${userId}`,
           `${API.BASE}/api/preferences?studentId=${userId}`,
@@ -260,57 +250,9 @@ export default function ProfileIntake() {
             const prefs = await res.json();
             if (!prefs || !mounted) continue;
 
-            // // Map server fields into local state (only update when present)
-            // if (prefs.budget !== undefined && prefs.budget !== null) {
-            //   setBudget(prefs.budget);
-            //   setBudgetText(String(prefs.budget));
-            // }
-            // if (prefs.schoolYear) setApplyYear(prefs.schoolYear);
-            // if (prefs.expectedGrad) setGradDate(prefs.expectedGrad);
-            // if (prefs.schoolType) {
-            //   setIsPrivate(
-            //     prefs.schoolType === "PRIVATE"
-            //       ? true
-            //       : prefs.schoolType === "PUBLIC"
-            //       ? false
-            //       : null
-            //   );
-            // }
-            // if (prefs.state) setStateLocation(prefs.state);
-            // if (prefs.programType) setMajor(prefs.programType);
-            // if (prefs.major) setMajor(prefs.major);
-            // if (prefs.requirementType)
-            //   if (prefs.requirementType === "CAPSTONE") {
-            //     // requrimnets are either CAPSTONE or NONE
-            //     setCapstone(prefs.requirementType === "CAPSTONE");
-            //   } else if (prefs.requirementType === "GRE") {
-            //     setCapstone(false);
-            //   } else {
-            //     setCapstone(false);
-            //   }
-
-            // if (prefs.enrollmentType)
-            //   setTimeType(
-            //     prefs.enrollmentType === "FULL_TIME" ? "Full-time" : "Part-time"
-            //   );
-            // if (prefs.modality)
-            //   setFormat(
-            //     prefs.modality === "IN_PERSON"
-            //       ? "In person"
-            //       : prefs.modality === "HYBRID"
-            //       ? "Hybrid"
-            //       : "Online"
-            //   );
-            // if (prefs.gpa !== undefined && prefs.gpa !== null) {
-            //   setGpa(prefs.gpa);
-            //   setGpaText(String(prefs.gpa));
-            // }
-            // if (prefs.targetCountry) setCountry(prefs.targetCountry);
-            // After `const prefs = await res.json();`
             console.log("Pref GET raw JSON:", prefs);
             const raw = prefs?.preference || prefs?.data || prefs || {};
 
-            // Map server fields into local state (only update when present)
             if (raw.budget !== undefined && raw.budget !== null) {
               setBudget(raw.budget);
               setBudgetText(String(raw.budget));
@@ -330,7 +272,6 @@ export default function ProfileIntake() {
             if (raw.programType) setMajor(raw.programType);
             if (raw.major) setMajor(raw.major);
 
-            // Normalize requirementType → capstone boolean
             if (
               raw.requirementType !== undefined &&
               raw.requirementType !== null
@@ -358,16 +299,12 @@ export default function ProfileIntake() {
               setGpaText(String(raw.gpa));
             }
             if (raw.targetCountry) setCountry(raw.targetCountry);
-            // found and applied prefs — stop trying other URLs
             break;
           } catch (e) {
-            // try next url
             continue;
           }
         }
-      } catch (e) {
-        // swallow — not critical for UX
-      }
+      } catch (e) {}
     };
     loadPrefs();
     return () => {
@@ -378,13 +315,11 @@ export default function ProfileIntake() {
   async function handleSubmit() {
     setSubmitting(true);
     try {
-      // 1) Normalize numbers
       const parsedBudget = parseFloat(budgetText);
       const parsedGpa = parseFloat(gpaText);
       const finalBudget = Number.isFinite(parsedBudget) ? parsedBudget : 0;
       const finalGpa = Number.isFinite(parsedGpa) ? parsedGpa : 0;
 
-      // 1.a Refresh auth context first to ensure we have latest user data
       let currentMe = me;
       if (!me || !me.authenticated || (!me.userId && !me.id)) {
         console.log("Auth context not loaded, refreshing...");
@@ -399,7 +334,6 @@ export default function ProfileIntake() {
         console.log("Refreshed me object:", JSON.stringify(currentMe, null, 2));
       }
 
-      // 1.b Obtain user id from auth context
       const userId = currentMe?.userId || currentMe?.id;
       if (!userId) {
         throw new Error("User not authenticated. Please log in first.");
@@ -410,21 +344,17 @@ export default function ProfileIntake() {
       }
       console.log("Using userId:", userIdNum);
 
-      // 2) Map UI → backend StudentPreference fields + enums
       const prefPayload: any = {
-        budget: finalBudget, // Double
+        budget: finalBudget,
         schoolYear: applyYear || null,
         expectedGrad: gradDate || null,
-        // SchoolType expected values: PRIVATE | PUBLIC | BOTH
         schoolType:
           isPrivate == null ? "BOTH" : isPrivate ? "PRIVATE" : "PUBLIC",
         state: stateLocation || null,
         programType: major || null,
         targetCountry: country || null,
         major: major || null,
-        // EnrollmentType: FULL_TIME | PART_TIME
         enrollmentType: timeType === "Full-time" ? "FULL_TIME" : "PART_TIME",
-        // Modality: IN_PERSON | HYBRID | ONLINE
         modality:
           format === "In person"
             ? "IN_PERSON"
@@ -432,13 +362,14 @@ export default function ProfileIntake() {
             ? "HYBRID"
             : "ONLINE",
         gpa: finalGpa,
-        // RequirementType: CAPSTONE or NEITHER (adjust for your server)
         requirementType: capstone ? "CAPSTONE" : "NEITHER",
       };
 
-      console.log("Sending preferences payload:", JSON.stringify(prefPayload, null, 2));
+      console.log(
+        "Sending preferences payload:",
+        JSON.stringify(prefPayload, null, 2)
+      );
 
-      // 3) Save/Upsert preferences (POST)
       const saveUrl = `${API.BASE}/api/preferences?userId=${userIdNum}`;
       console.log("POST to:", saveUrl);
       const saveRes = await fetch(saveUrl, {
@@ -451,9 +382,7 @@ export default function ProfileIntake() {
       if (!saveRes.ok) {
         const text = await saveRes.text().catch(() => "");
         console.error("Backend response:", saveRes.status, text);
-        throw new Error(
-          `Failed to save preferences: ${saveRes.status} ${text}`
-        );
+        throw new Error(`Failed to save preferences: ${saveRes.status} ${text}`);
       }
       let savedPrefs = null;
       try {
@@ -461,7 +390,6 @@ export default function ProfileIntake() {
       } catch {}
       const effective = savedPrefs || prefPayload;
 
-      // update UI immediately from server-returned object or the payload we sent
       if (effective.budget !== undefined && effective.budget !== null) {
         setBudget(effective.budget);
         setBudgetText(String(effective.budget));
@@ -481,7 +409,6 @@ export default function ProfileIntake() {
       if (effective.programType) setMajor(effective.programType);
       if (effective.major) setMajor(effective.major);
 
-      // normalize requirementType → capstone boolean
       if (
         effective.requirementType !== undefined &&
         effective.requirementType !== null
@@ -510,26 +437,38 @@ export default function ProfileIntake() {
       }
       if (effective.targetCountry) setCountry(effective.targetCountry);
 
-      // 4) Fetch top 5 scored schools
-      const topUrl = `${API.BASE}/api/schools/top5?userId=${userId}`;
-      const topRes = await fetch(topUrl, { credentials: "include" });
-      if (!topRes.ok) {
-        const text = await topRes.text().catch(() => "");
-        throw new Error(
-          `Failed to fetch top schools: ${topRes.status} ${text}`
-        );
-      }
-      const topSchools = await topRes.json();
+      // 4) Get top schools to show on the Dashboard.
+      // Prefer Supabase (if configured) so universities can come directly from your Supabase "schools" table.
+      // Falls back to your backend endpoint if Supabase isn't set up yet.
+      let topSchools: any[] | null = null;
 
-      // 5) Navigate with results into Tabs -> Dashboard
-      // Use nested param form to ensure inner tab receives the params
+      if (isSupabaseConfigured()) {
+        const { data, error } = await supabase.from("schools").select("*");
+        if (error) {
+          console.warn("Supabase fetch schools error:", error.message);
+        } else if (Array.isArray(data) && data.length > 0) {
+          topSchools = computeTop5SchoolsFromRows(data, prefPayload);
+        }
+      }
+
+      if (!topSchools) {
+        const topUrl = `${API.BASE}/api/schools/top5?userId=${userId}`;
+        const topRes = await fetch(topUrl, { credentials: "include" });
+        if (!topRes.ok) {
+          const text = await topRes.text().catch(() => "");
+          throw new Error(
+            `Failed to fetch top schools: ${topRes.status} ${text}`
+          );
+        }
+        topSchools = await topRes.json();
+      }
+
       navigation.navigate("Tabs", {
         screen: "Dashboard",
         params: { topSchools },
       });
     } catch (err) {
       console.warn("Submit error:", err);
-      // Graceful fallback: go to Dashboard without results
       navigation.navigate("Tabs", { screen: "Dashboard" });
     } finally {
       setSubmitting(false);
@@ -609,11 +548,7 @@ export default function ProfileIntake() {
             onChange={setStateLocation}
           />
 
-          <MajorSelectField
-          value={major}
-          options={majorOptions}
-          onChange={setMajor}
-          />
+          <MajorSelectField value={major} options={majorOptions} onChange={setMajor} />
 
           <View style={styles.inlineField}>
             <Text style={styles.label}>Capstone Required?</Text>
