@@ -1,4 +1,5 @@
 import "react-native-gesture-handler";
+import "react-native-url-polyfill/auto";
 import * as React from "react";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
