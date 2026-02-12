@@ -18,8 +18,6 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import type { NavigationProp } from "@react-navigation/native";
 import API from "../lib/api";
-import { supabase, isSupabaseConfigured } from "../lib/supabase";
-import { computeTop5SchoolsFromRows } from "../lib/schoolMatching";
 
 import { useAuth } from "../context/AuthContext";
 
@@ -439,31 +437,14 @@ export default function ProfileIntake() {
       }
       if (effective.targetCountry) setCountry(effective.targetCountry);
 
-      // 4) Get top schools to show on the Dashboard.
-      // Prefer Supabase (if configured) so universities can come directly from your Supabase "schools" table.
-      // Falls back to your backend endpoint if Supabase isn't set up yet.
-      let topSchools: any[] | null = null;
-
-      if (isSupabaseConfigured()) {
-        const { data, error } = await supabase.from("schools").select("*");
-        if (error) {
-          console.warn("Supabase fetch schools error:", error.message);
-        } else if (Array.isArray(data) && data.length > 0) {
-          topSchools = computeTop5SchoolsFromRows(data, prefPayload);
-        }
+      // 4) Get top schools from the backend API.
+      const topUrl = `${API.BASE}/api/schools/top5?userId=${userId}`;
+      const topRes = await fetch(topUrl, { credentials: "include" });
+      if (!topRes.ok) {
+        const text = await topRes.text().catch(() => "");
+        throw new Error(`Failed to fetch top schools: ${topRes.status} ${text}`);
       }
-
-      if (!topSchools) {
-        const topUrl = `${API.BASE}/api/schools/top5?userId=${userId}`;
-        const topRes = await fetch(topUrl, { credentials: "include" });
-        if (!topRes.ok) {
-          const text = await topRes.text().catch(() => "");
-          throw new Error(
-            `Failed to fetch top schools: ${topRes.status} ${text}`,
-          );
-        }
-        topSchools = await topRes.json();
-      }
+      const topSchools = await topRes.json();
 
       navigation.navigate("Tabs", {
         screen: "Dashboard",
