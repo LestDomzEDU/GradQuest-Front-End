@@ -9,11 +9,13 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   Modal,
   Pressable,
   Linking,
   Image,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSavedApps } from "../context/SavedAppsContext";
@@ -39,6 +41,8 @@ const PALETTE = {
 };
 
 const TUTORIAL_KEY = "tutorial:completed";
+const { width } = Dimensions.get("window");
+const CARD_WIDTH = width * 0.72 
 
 function CoachBubble({ title, body, arrowLeftPct }) {
   return (
@@ -344,7 +348,8 @@ export default function DashboardScreen() {
                   id,
                   name,
                   company: program,
-                  urgent: !!item.urgent,
+                  // urgent: !!item.urgent,
+                  urgent: false, 
                   link: website,
                 });
                 // Create reminder in database
@@ -377,13 +382,89 @@ export default function DashboardScreen() {
       <View style={s.headerAccent} />
 
       {/* MAIN LIST */}
-      <FlatList
+      {/* <FlatList
         contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
         data={dataToShow}
         keyExtractor={keyForItem}
         ListEmptyComponent={renderEmpty}
         renderItem={renderItem}
+      /> */}
+      <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 80 }}
+      >
+
+      {/* SECTION TITLE */}
+      <View style={{ marginTop: 20 }}>
+        <Text style={s.sectionTitle}>Top 5 Recommended</Text>
+        
+        {dataToShow.length === 0 ? (
+          renderEmpty()
+        ) : (
+        <FlatList
+        data={dataToShow}
+        // horizontal
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={keyForItem}
+        contentContainerStyle={{ paddingLeft: 16 }}
+        snapToInterval={CARD_WIDTH + 16}
+        decelerationRate="fast"
+        renderItem={({ item }) => {
+          const id = item.id ?? item.schoolId ?? item.name;
+          const saved = savedApps.find((a) => a.id === id);
+          const name = item.name ?? item.schoolName ?? item.programName ?? "Untitled";
+          const program = item.programName ?? item.program ?? item.programType ?? "Program info";
+          const website = item.websiteUrl ?? item.website ?? item.link ?? null;
+
+          return (
+            <View style={s.sliderCard}>
+              <Image
+                source={require("../../assets/placeholder_college.png")}
+                style={s.sliderImage}
+              />
+
+              <Text style={s.cardTitle}>{name}</Text>
+              <Text style={s.cardSub}>{program}</Text>
+
+              <View style={s.cardActions}>
+                {website && (
+                  <Pressable
+                    onPress={() => openUrl(website)}
+                    style={s.primaryBtn}
+                  >
+                    <Text style={s.primaryBtnText}>Visit</Text>
+                  </Pressable>
+                )}
+
+                <Pressable
+                  onPress={() =>
+                    saved
+                      ? removeSavedApp(id)
+                      : addSavedApp({
+                          id,
+                          name,
+                          company: program,
+                          urgent: false,
+                          link: website,
+                        })
+                  }
+                  style={saved ? s.removeBtn : s.saveBtn}
+                >
+                  <Text style={saved ? s.removeBtnText : s.saveBtnText}>
+                    {saved ? "Remove" : "Save"}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          );
+        }}
       />
+    )}
+  </View>
+
+  {/* Future sections go here */}
+  <View style={{ height: 40 }} />
+  </ScrollView>
 
       {/* Models Modal (kept for future use) */}
       <Modal
@@ -629,6 +710,33 @@ const s = StyleSheet.create({
   closeButtonText: {
     color: PALETTE.white,
     fontWeight: "600",
+  },
+  sectionTitle: {
+  fontSize: 20,
+  fontWeight: "800",
+  marginBottom: 12,
+  marginLeft: 16,
+  color: PALETTE.blueDark,
+  },
+  sliderCard: {
+  // width: CARD_WIDTH,
+  width: "100%",
+  backgroundColor: PALETTE.white,
+  padding: 16,
+  borderRadius: 18,
+  marginBottom: 16,
+  shadowColor: "#000",
+  shadowOpacity: 0.08,
+  shadowOffset: { width: 0, height: 4 },
+  shadowRadius: 10,
+  elevation: 4,
+  },
+sliderImage: {
+  width: "100%",
+  height: 140,
+  borderRadius: 14,
+  marginBottom: 10,
+  resizeMode: "cover",
   },
 });
 
