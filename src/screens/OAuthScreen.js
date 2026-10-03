@@ -94,6 +94,8 @@ export default function OAuthScreen() {
       ? "GitHub"
       : currentProvider === "discord"
       ? "Discord"
+      : currentProvider === "dev"
+      ? "a dev test account"
       : "your account";
 
   // ✅ This is the correct navigation target for this project:
@@ -203,6 +205,27 @@ export default function OAuthScreen() {
     [loadMe]
   );
 
+  const startDevLogin = React.useCallback(async () => {
+    setCurrentProvider("dev");
+    didRedirectRef.current = false;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API.DEV_LOGIN}?as=tester`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        console.warn("OAuthScreen: dev login failed", res.status);
+        return;
+      }
+      await loadMe();
+    } catch (e) {
+      console.warn("OAuthScreen: dev login error", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [loadMe]);
+
   // Native WebView navigation handler
   const onWebNav = React.useCallback((navState) => {
     const url = navState?.url || "";
@@ -260,6 +283,20 @@ export default function OAuthScreen() {
                 Discord
               </Text>
             </Pressable>
+
+            {API.DEV_LOGIN_ENABLED && (
+              <>
+                <View style={{ height: 12 }} />
+                <Pressable
+                  onPress={startDevLogin}
+                  style={[styles.providerBtn, styles.devBtn]}
+                >
+                  <Text style={[styles.providerText, { color: PALETTE.blueDark }]}>
+                    Dev login (local only)
+                  </Text>
+                </Pressable>
+              </>
+            )}
 
             <View style={{ height: 16 }} />
 
@@ -429,6 +466,12 @@ const styles = StyleSheet.create({
   providerText: {
     fontSize: 16,
     fontWeight: "800",
+  },
+  devBtn: {
+    backgroundColor: PALETTE.blueSoft,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: PALETTE.blue,
   },
   loadingRow: {
     marginTop: 6,

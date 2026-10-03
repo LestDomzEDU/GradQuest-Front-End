@@ -1,9 +1,10 @@
 # dependencies
 node_modules/
-package-lock.json # <— keep ONE lockfile; if you use npm, keep this and remove yarn.lock
-# if you use yarn instead, swap the two lines above:
-# yarn.lock
-# npm-debug.log*  # ok to ignore
+npm-debug.log*
+
+# local env files (may contain secrets)
+.env
+.env.*
 
 # Expo / RN caches
 .expo/
