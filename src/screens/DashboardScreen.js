@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSavedApps } from "../context/SavedAppsContext";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
 import { apiFetch } from "../lib/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -63,8 +63,15 @@ export default function DashboardScreen() {
   const [selectedCollege, setSelectedCollege] = useState(null);
 
   // saved apps context
-  // saved apps context
-  const { savedApps, addSavedApp, removeSavedApp } = useSavedApps();
+  const { savedApps, saveSchool, removeSchool, reloadSaved } = useSavedApps();
+  const [saveError, setSaveError] = useState(null);
+
+  // Reminders deleted on the Reminders tab unsave their school too.
+  useFocusEffect(
+    useCallback(() => {
+      reloadSaved();
+    }, [reloadSaved])
+  );
 
   // Auth + preference-based recommendations
   const { me } = useAuth();
@@ -218,36 +225,21 @@ export default function DashboardScreen() {
     </View>
   );
 
-  // functio to create reminder in database when saving a school
-  const createReminder = async (schoolId) => {
-    try {
-      const res = await apiFetch(`/api/reminders?schoolId=${schoolId}`, {
-        method: "POST",
-      });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        console.warn("Failed to create reminder:", res.status, text);
+  const toggleSaved = async (item, id, saved) => {
+    setSaveError(null);
+    if (saved) {
+      if (!(await removeSchool(id))) {
+        setSaveError("We couldn't remove that school. Please try again.");
       }
-    } catch (err) {
-      console.warn("Error creating reminder:", err);
+      return;
     }
-  };
-
-  // delete reminder from database when removing a school
-  const deleteReminder = async (schoolId) => {
-    try {
-      const res = await apiFetch(`/api/reminders/school/${schoolId}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        console.warn("Failed to delete reminder:", res.status, text);
-      }
-    } catch (err) {
-      console.warn("Error deleting reminder:", err);
-    }
+    const ok = await saveSchool({
+      id,
+      name: item.name ?? item.schoolName ?? "Untitled",
+      company: item.programName ?? item.program ?? "Program info",
+      link: item.websiteUrl ?? item.website ?? null,
+    });
+    if (!ok) setSaveError("We couldn't save that school. Please try again.");
   };
 
   const renderItem = ({ item }) => {
@@ -284,25 +276,7 @@ export default function DashboardScreen() {
           )}
 
           <TouchableOpacity
-            onPress={async () => {
-              if (saved) {
-                // Remove from local state
-                removeSavedApp(id);
-                // Delete reminder from database
-                await deleteReminder(id);
-              } else {
-                // Add to local state
-                addSavedApp({
-                  id,
-                  name,
-                  company: program,
-                  urgent: !!item.urgent,
-                  link: website,
-                });
-                // Create reminder in database
-                await createReminder(id);
-              }
-            }}
+            onPress={() => toggleSaved(item, id, saved)}
             style={saved ? s.removeBtn : s.saveBtn}
           >
             <Text style={saved ? s.removeBtnText : s.saveBtnText}>
@@ -327,6 +301,12 @@ export default function DashboardScreen() {
       </View>
 
       <View style={s.headerAccent} />
+
+      {saveError ? (
+        <Text style={s.errorText} accessibilityRole="alert">
+          {saveError}
+        </Text>
+      ) : null}
 
       {/* MAIN LIST */}
       <FlatList
@@ -519,6 +499,12 @@ const s = StyleSheet.create({
   removeBtnText: {
     color: "#B00020",
     fontWeight: "700",
+  },
+  errorText: {
+    color: PALETTE.danger,
+    fontWeight: "600",
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
 
   // Shared overlay for both models modal and tutorial modal
