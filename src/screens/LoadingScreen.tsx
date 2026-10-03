@@ -3,6 +3,7 @@ import { Image, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
+import { resolveHomeRoute } from "../lib/homeRoute";
 
 const SPLASH_MS = 1500;
 
@@ -24,10 +25,14 @@ export default function LoadingScreen() {
   // Leave the splash once it has shown and the session check (/api/me) has answered.
   useEffect(() => {
     if (!splashDone || me === null) return;
-    navigation.reset({
-      index: 0,
-      routes: [{ name: me.authenticated ? "Tabs" : "Home" }],
-    });
+    let cancelled = false;
+    (async () => {
+      const route = me.authenticated ? await resolveHomeRoute() : { name: "Home" };
+      if (!cancelled) navigation.reset({ index: 0, routes: [route] });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [splashDone, me, navigation]);
 
   return (

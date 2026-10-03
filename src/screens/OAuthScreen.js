@@ -16,6 +16,7 @@ import { WebView } from "react-native-webview";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { resolveHomeRoute } from "../lib/homeRoute";
 
 const TUTORIAL_KEY = "tutorial:completed";
 
@@ -87,23 +88,11 @@ export default function OAuthScreen() {
       ? "a dev test account"
       : "your account";
 
-  // ✅ This is the correct navigation target for this project:
-  // Stack route "Tabs" -> tab screen "Dashboard"
-  const goToDashboardTabs = React.useCallback(() => {
+  // New users go to intake, returning users to Tabs -> Dashboard
+  const goToDashboardTabs = React.useCallback(async () => {
     didRedirectRef.current = true;
-
-    navigation.reset({
-      index: 0,
-      routes: [
-        {
-          name: "Tabs",
-          params: {
-            screen: "Dashboard",
-            params: { showTutorial: true },
-          },
-        },
-      ],
-    });
+    const route = await resolveHomeRoute();
+    navigation.reset({ index: 0, routes: [route] });
   }, [navigation]);
 
   // ✅ Auto-redirect after login is confirmed (no button required)
