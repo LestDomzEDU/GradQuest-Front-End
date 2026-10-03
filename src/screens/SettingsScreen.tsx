@@ -2,7 +2,6 @@ import React from "react";
 import { View, Text, StyleSheet, Image, Pressable, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect, useRoute } from "@react-navigation/native";
-import API from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -65,7 +64,7 @@ function pickUsername(me?: AnyObj) {
 export default function SettingsScreen() {
   const navigation = useNavigation();
 
-  const { me: authMe, refresh } = useAuth();
+  const { me: authMe, refresh, logout } = useAuth();
   const me = authMe as AnyObj | null;
   const [busy, setBusy] = React.useState(false);
   const [tutorialGate, setTutorialGate] = React.useState(false);
@@ -96,8 +95,7 @@ export default function SettingsScreen() {
     if (busy) return;
     setBusy(true);
     try {
-      await fetch(API.LOGOUT, { method: "POST", credentials: "include" });
-    } catch {
+      await logout();
     } finally {
       setBusy(false);
       (navigation as any).reset({

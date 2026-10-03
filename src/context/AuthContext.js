@@ -2,10 +2,12 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import API from "../lib/api";
 
+// `me` is null until the first /api/me response arrives, then an object with `authenticated`.
 const AuthContext = createContext({
   me: null,
   setMe: () => {},
   refresh: async () => {},
+  logout: async () => {},
 });
 
 export const AuthProvider = ({ children }) => {
@@ -23,13 +25,21 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // Refresh on mount (optional)
+  const logout = useCallback(async () => {
+    try {
+      await fetch(API.LOGOUT, { method: "POST", credentials: "include" });
+    } catch (e) {
+      // Clear local state even if the backend is unreachable.
+    }
+    setMe({ authenticated: false });
+  }, []);
+
   React.useEffect(() => {
     refresh();
   }, [refresh]);
 
   return (
-    <AuthContext.Provider value={{ me, setMe, refresh }}>
+    <AuthContext.Provider value={{ me, setMe, refresh, logout }}>
       {children}
     </AuthContext.Provider>
   );
