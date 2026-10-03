@@ -39,7 +39,7 @@ describe("ProfileIntake", () => {
   test("renders the full intake form", () => {
     const { getByText, getByLabelText } = render(<ProfileIntake />);
     expect(getByText("Profile Intake")).toBeTruthy();
-    expect(getByText("Location State")).toBeTruthy();
+    expect(getByText("Location State (required)")).toBeTruthy();
     expect(getByLabelText("Expected Graduation Date")).toBeTruthy();
     expect(getByText("Save profile")).toBeTruthy();
   });
@@ -81,5 +81,77 @@ describe("ProfileIntake", () => {
     expect(saveOptions).toMatchObject({ credentials: "include" });
     expect(JSON.parse(saveOptions.body)).toMatchObject({ state: "CA", expectedGrad: "2028-05-15", schoolType: "PUBLIC" });
     expect(saveOptions.body).not.toMatch(/userId/);
+  });
+
+  const postCalls = () => global.fetch.mock.calls.filter(([, o]) => o?.method === "POST");
+
+  test("a blank graduation date blocks the save with a message", async () => {
+    const { getByText, findByText } = render(<ProfileIntake />);
+    fireEvent.press(getByText("Save profile"));
+
+    expect(await findByText("Enter your expected graduation date as YYYY-MM-DD.")).toBeTruthy();
+    expect(postCalls()).toHaveLength(0);
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  test("an invalid graduation date blocks the save", async () => {
+    const { getByText, getByLabelText, findByText } = render(<ProfileIntake />);
+    fireEvent.changeText(getByLabelText("Expected Graduation Date"), "May 2028");
+    fireEvent.press(getByText("Save profile"));
+
+    expect(await findByText("Enter your expected graduation date as YYYY-MM-DD.")).toBeTruthy();
+    expect(postCalls()).toHaveLength(0);
+  });
+
+  test("a missing state blocks the save with a message", async () => {
+    const { getByText, getByLabelText, findByText } = render(<ProfileIntake />);
+    fireEvent.changeText(getByLabelText("Expected Graduation Date"), "2028-05-15");
+    fireEvent.press(getByText("Save profile"));
+
+    expect(await findByText("Choose a location state.")).toBeTruthy();
+    expect(postCalls()).toHaveLength(0);
+  });
+
+  test("a failed save shows an error and stays on the form", async () => {
+    mockMe = { authenticated: true, userId: 1 };
+    global.fetch.mockImplementation((url, options = {}) =>
+      options.method === "POST" ? json(400, { error: "Failed to save preferences" }) : json(200, SAVED)
+    );
+    const { findByDisplayValue, getByText, findByText } = render(<ProfileIntake />);
+    await findByDisplayValue("2028-05-15");
+
+    fireEvent.press(getByText("Save profile"));
+
+    expect(await findByText("We couldn't save your preferences. Please try again.")).toBeTruthy();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  test("a network failure on save shows an error and stays on the form", async () => {
+    mockMe = { authenticated: true, userId: 1 };
+    global.fetch.mockImplementation((url, options = {}) =>
+      options.method === "POST" ? Promise.reject(new Error("offline")) : json(200, SAVED)
+    );
+    const { findByDisplayValue, getByText, findByText } = render(<ProfileIntake />);
+    await findByDisplayValue("2028-05-15");
+
+    fireEvent.press(getByText("Save profile"));
+
+    expect(await findByText("We couldn't reach the server. Check your connection and try again.")).toBeTruthy();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  test("if only the top-5 lookup fails, the saved user still reaches the dashboard", async () => {
+    mockMe = { authenticated: true, userId: 1 };
+    global.fetch.mockImplementation((url, options = {}) => {
+      if (url.endsWith("/api/schools/top5")) return json(500, {});
+      if (options.method === "POST") return json(200, SAVED);
+      return json(200, SAVED);
+    });
+    const { findByDisplayValue, getByText } = render(<ProfileIntake />);
+    await findByDisplayValue("2028-05-15");
+
+    fireEvent.press(getByText("Save profile"));
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("Tabs", { screen: "Dashboard", params: undefined }));
   });
 });
