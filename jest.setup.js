@@ -56,6 +56,7 @@ jest.mock("react-native-safe-area-context", () => ({
 // Mock navigation - but simpler since we pass it in tests
 jest.mock("@react-navigation/native", () => {
   const actualNav = jest.requireActual("@react-navigation/native");
+  const React = require("react");
   return {
     ...actualNav,
     useNavigation: () => ({
@@ -65,5 +66,20 @@ jest.mock("@react-navigation/native", () => {
     useRoute: () => ({
       params: {},
     }),
+    useFocusEffect: (effect) => React.useEffect(effect, [effect]),
   };
 });
+
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock")
+);
+
+// Screens call the backend on mount; tests run signed out unless they override fetch.
+global.fetch = jest.fn(() =>
+  Promise.resolve({
+    ok: false,
+    status: 401,
+    json: () => Promise.resolve({ authenticated: false }),
+    text: () => Promise.resolve(""),
+  })
+);

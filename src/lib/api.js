@@ -36,4 +36,12 @@ const API = {
   BASE: BASE_URL,
 };
 
+/**
+ * fetch() against the backend with the session cookie attached.
+ * The backend identifies the user from the session, so never pass a userId.
+ */
+export function apiFetch(path, options = {}) {
+  return fetch(`${BASE_URL}${path}`, { credentials: "include", ...options });
+}
+
 export default API;

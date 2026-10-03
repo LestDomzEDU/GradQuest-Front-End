@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
-import API from "../lib/api";
+import { apiFetch } from "../lib/api";
 
   const PALETTE = {
   blueDark: "#053F7C",
@@ -26,7 +26,7 @@ import API from "../lib/api";
 };
 
 export default function ReminderScreen() {
-  const { me, refresh } = useAuth();
+  const { me } = useAuth();
   const [reminders, setReminders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,23 +34,13 @@ export default function ReminderScreen() {
   const fetchReminders = async () => {
     try {
       setLoading(true);
-      
-      let currentMe = me;
-      if (!currentMe || !currentMe.authenticated || (!currentMe.userId && !currentMe.id)) {
-        if (typeof refresh === "function") {
-          currentMe = await refresh();
-        }
-      }
 
-      const userId = currentMe?.userId || currentMe?.id;
-      if (!userId) {
+      if (!me?.authenticated) {
         setReminders([]);
-        setLoading(false);
         return;
       }
 
-      const url = `${API.BASE}/api/reminders?userId=${userId}`;
-      const res = await fetch(url, { credentials: "include" });
+      const res = await apiFetch("/api/reminders");
 
       if (!res.ok) {
         const text = await res.text().catch(() => "");
@@ -115,23 +105,8 @@ export default function ReminderScreen() {
   // deliting reminder function
   const deleteReminder = async (reminderId: string) => {
     try {
-      let currentMe = me;
-      if (!currentMe || !currentMe.authenticated || (!currentMe.userId && !currentMe.id)) {
-        if (typeof refresh === "function") {
-          currentMe = await refresh();
-        }
-      }
-
-      const userId = currentMe?.userId || currentMe?.id;
-      if (!userId) {
-        console.warn("Cannot delete reminder: user not authenticated");
-        return;
-      }
-
-      const url = `${API.BASE}/api/reminders/${reminderId}?userId=${userId}`;
-      const res = await fetch(url, {
+      const res = await apiFetch(`/api/reminders/${reminderId}`, {
         method: "DELETE",
-        credentials: "include",
       });
 
       if (!res.ok) {
@@ -150,23 +125,8 @@ export default function ReminderScreen() {
   // toggling reminder completed status function
   const toggleCompleted = async (reminderId: string) => {
     try {
-      let currentMe = me;
-      if (!currentMe || !currentMe.authenticated || (!currentMe.userId && !currentMe.id)) {
-        if (typeof refresh === "function") {
-          currentMe = await refresh();
-        }
-      }
-
-      const userId = currentMe?.userId || currentMe?.id;
-      if (!userId) {
-        console.warn("Cannot toggle reminder completion: user not authenticated");
-        return;
-      }
-
-      const url = `${API.BASE}/api/reminders/${reminderId}/complete?userId=${userId}`;
-      const res = await fetch(url, {
+      const res = await apiFetch(`/api/reminders/${reminderId}/complete`, {
         method: "PATCH",
-        credentials: "include",
       });
 
       if (!res.ok) {

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Image, Pressable, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect, useRoute } from "@react-navigation/native";
 import API from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const PALETTE = {
@@ -43,15 +44,8 @@ function pickAvatar(me?: AnyObj) {
 function pickUsername(me?: AnyObj) {
   if (!me) return "";
 
-  const attrs =
-    (me["attributes"] && typeof me["attributes"] === "object"
-      ? (me["attributes"] as AnyObj)
-      : {}) || {};
-
   const flat = first<string>(
     me["name"] as any,
-    attrs["global_name"] as any,
-    attrs["username"] as any,
     me["login"] as any,
     me["username"] as any,
     me["githubUsername"] as any
@@ -71,19 +65,14 @@ function pickUsername(me?: AnyObj) {
 export default function SettingsScreen() {
   const navigation = useNavigation();
 
-  const [me, setMe] = React.useState<AnyObj | null>(null);
+  const { me: authMe, refresh } = useAuth();
+  const me = authMe as AnyObj | null;
   const [busy, setBusy] = React.useState(false);
   const [tutorialGate, setTutorialGate] = React.useState(false);
 
   const load = React.useCallback(async () => {
-    try {
-      const res = await fetch(API.ME, { credentials: "include" });
-      const data = await res.json();
-      setMe(data);
-    } catch {
-      setMe(null);
-    }
-  }, []);
+    await refresh();
+  }, [refresh]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -130,7 +119,7 @@ export default function SettingsScreen() {
     pickAvatar(me || {}) ||
     "https://ui-avatars.com/api/?name=U&background=EEE&color=7C7C7C";
 
-  const username = pickUsername(me || {}) || "Unknown User";
+  const username = me ? pickUsername(me) || "Unknown User" : "Loading…";
 
   return (
     <SafeAreaView style={s.screen}>

@@ -66,7 +66,6 @@ export default function OAuthScreen() {
     try {
       const res = await fetch(API.ME, { credentials: "include" });
       const data = await res.json();
-      console.log("ME response:", data);
       setMe(data);
       return data;
     } catch (e) {

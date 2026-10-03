@@ -15,13 +15,6 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await fetch(API.ME, { credentials: "include" });
       const data = await res.json().catch(() => ({ authenticated: false }));
-      
-      // Log user ID when auth context refreshes
-      if (data?.authenticated) {
-        const userId = data.userId || data.id;
-        console.log('UserId:', userId);
-      }
-      
       setMe(data);
       return data;
     } catch (e) {
