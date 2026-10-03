@@ -192,6 +192,7 @@ export default function ProfileIntake() {
   const majorOptions = ["Math", "English", "Computer Science"];
 
   const [submitting, setSubmitting] = React.useState(false);
+  const [formError, setFormError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let mounted = true;
@@ -267,7 +268,23 @@ export default function ProfileIntake() {
     };
   }, [me]);
 
+  // expectedGrad and state are NOT NULL in student_preferences.
+  function validationError(): string | null {
+    const grad = gradDate.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(grad) || Number.isNaN(Date.parse(grad))) {
+      return "Enter your expected graduation date as YYYY-MM-DD.";
+    }
+    if (!stateLocation) return "Choose a location state.";
+    return null;
+  }
+
   async function handleSubmit() {
+    const invalid = validationError();
+    if (invalid) {
+      setFormError(invalid);
+      return;
+    }
+    setFormError(null);
     setSubmitting(true);
     try {
       const parsedBudget = parseFloat(budgetText);
@@ -278,7 +295,7 @@ export default function ProfileIntake() {
       const prefPayload: any = {
         budget: finalBudget,
         schoolYear: applyYear || null,
-        expectedGrad: gradDate || null,
+        expectedGrad: gradDate.trim(),
         schoolType:
           isPrivate == null ? "BOTH" : isPrivate ? "PRIVATE" : "PUBLIC",
         state: stateLocation || null,
@@ -303,10 +320,8 @@ export default function ProfileIntake() {
       });
 
       if (!saveRes.ok) {
-        const text = await saveRes.text().catch(() => "");
-        throw new Error(
-          `Failed to save preferences: ${saveRes.status} ${text}`,
-        );
+        setFormError("We couldn't save your preferences. Please try again.");
+        return;
       }
       let savedPrefs = null;
       try {
@@ -361,21 +376,19 @@ export default function ProfileIntake() {
       }
       if (effective.targetCountry) setCountry(effective.targetCountry);
 
-      // 4) Get top schools from the backend API.
-      const topRes = await apiFetch("/api/schools/top5");
-      if (!topRes.ok) {
-        const text = await topRes.text().catch(() => "");
-        throw new Error(`Failed to fetch top schools: ${topRes.status} ${text}`);
-      }
-      const topSchools = await topRes.json();
+      // Preferences are saved; if the top-5 lookup fails the dashboard fetches it itself.
+      let topSchools = null;
+      try {
+        const topRes = await apiFetch("/api/schools/top5");
+        if (topRes.ok) topSchools = await topRes.json();
+      } catch (e) {}
 
       navigation.navigate("Tabs", {
         screen: "Dashboard",
-        params: { topSchools },
+        params: topSchools ? { topSchools } : undefined,
       });
     } catch (err) {
-      console.warn("Submit error:", err);
-      navigation.navigate("Tabs", { screen: "Dashboard" });
+      setFormError("We couldn't reach the server. Check your connection and try again.");
     } finally {
       setSubmitting(false);
     }
@@ -430,7 +443,7 @@ export default function ProfileIntake() {
           />
 
           <View style={styles.field}>
-            <Text style={styles.label}>Expected Graduation Date</Text>
+            <Text style={styles.label}>Expected Graduation Date (required)</Text>
             <TextInput
               accessibilityLabel="Expected Graduation Date"
               style={styles.input}
@@ -450,7 +463,7 @@ export default function ProfileIntake() {
           />
 
           <SelectField
-            label="Location State"
+            label="Location State (required)"
             value={stateLocation}
             options={states}
             onChange={setStateLocation}
@@ -498,6 +511,12 @@ export default function ProfileIntake() {
               }}
             />
           </View>
+
+          {formError ? (
+            <Text style={styles.errorText} accessibilityRole="alert">
+              {formError}
+            </Text>
+          ) : null}
 
           <Pressable
             style={styles.button}
@@ -556,6 +575,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: "center",
     marginTop: 20,
+  },
+  errorText: {
+    color: "#B00020",
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 12,
   },
   buttonText: {
     color: "#FFFFFF",
