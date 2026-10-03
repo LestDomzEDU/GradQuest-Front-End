@@ -15,6 +15,7 @@ import { useNavigation } from "@react-navigation/native";
 import { WebView } from "react-native-webview";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import API from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 
 const TUTORIAL_KEY = "tutorial:completed";
 
@@ -45,7 +46,7 @@ const looksAuthenticated = (me) => {
 export default function OAuthScreen() {
   const navigation = useNavigation();
 
-  const [me, setMe] = React.useState(null);
+  const { me, setMe, refresh } = useAuth();
   const [loading, setLoading] = React.useState(false);
 
   const [showWeb, setShowWeb] = React.useState(false);
@@ -61,19 +62,8 @@ export default function OAuthScreen() {
   // Prevent double-navigation loops
   const didRedirectRef = React.useRef(false);
 
-  // Load /api/me and update state (WEB only is reliable for cookies)
-  const loadMe = React.useCallback(async () => {
-    try {
-      const res = await fetch(API.ME, { credentials: "include" });
-      const data = await res.json();
-      setMe(data);
-      return data;
-    } catch (e) {
-      console.warn("OAuthScreen: failed to load /api/me", e);
-      setMe(null);
-      return null;
-    }
-  }, []);
+  // Load /api/me into the shared auth state (WEB only is reliable for cookies)
+  const loadMe = refresh;
 
   React.useEffect(() => {
     return () => {
@@ -147,7 +137,7 @@ export default function OAuthScreen() {
 
       // Reset redirect guard + any previous auth state
       didRedirectRef.current = false;
-      setMe(null);
+      setMe({ authenticated: false });
       setShowWeb(false);
 
       // Always log out the backend session before starting a new OAuth login
@@ -201,7 +191,7 @@ export default function OAuthScreen() {
       setShowWeb(true);
       setWebKey((k) => k + 1);
     },
-    [loadMe]
+    [loadMe, setMe]
   );
 
   const startDevLogin = React.useCallback(async () => {

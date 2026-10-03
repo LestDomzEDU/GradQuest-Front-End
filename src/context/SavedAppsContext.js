@@ -1,4 +1,5 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import { useAuth } from "./AuthContext";
 
 const SavedAppsContext = createContext({
   savedApps: [],
@@ -8,6 +9,13 @@ const SavedAppsContext = createContext({
 
 export function SavedAppsProvider({ children }) {
   const [savedApps, setSavedApps] = useState([]);
+  const { me } = useAuth();
+  const userId = me?.authenticated ? me.userId ?? me.id : null;
+
+  // Saved schools belong to one user; drop them on logout or account switch.
+  useEffect(() => {
+    setSavedApps([]);
+  }, [userId]);
 
   function addSavedApp(app) {
     setSavedApps((prev) => {
