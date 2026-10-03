@@ -7,6 +7,11 @@ import { SavedAppsProvider, useSavedApps } from "../SavedAppsContext";
 const jsonResponse = (body) =>
   Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
 
+const sessionWithSaved = (userId) => (url) =>
+  url.endsWith("/api/reminders")
+    ? jsonResponse([{ id: 9, schoolId: 5, schoolName: "UC San Diego" }])
+    : jsonResponse({ authenticated: true, userId });
+
 let ctx;
 function Probe() {
   ctx = { ...useAuth(), ...useSavedApps() };
@@ -34,12 +39,10 @@ describe("AuthContext", () => {
   });
 
   it("logout calls the backend, clears the user and their saved schools", async () => {
-    global.fetch.mockImplementation(() => jsonResponse({ authenticated: true, userId: 1 }));
+    global.fetch.mockImplementation(sessionWithSaved(1));
     const { findByText } = renderProviders();
     await findByText("user:1");
-
-    act(() => ctx.addSavedApp({ id: 5, name: "UC San Diego" }));
-    expect(ctx.savedApps).toHaveLength(1);
+    await waitFor(() => expect(ctx.savedApps).toHaveLength(1));
 
     await act(() => ctx.logout());
 
@@ -62,11 +65,14 @@ describe("AuthContext", () => {
   });
 
   it("switching accounts drops the previous user's saved schools", async () => {
-    global.fetch.mockImplementation(() => jsonResponse({ authenticated: true, userId: 1 }));
+    global.fetch.mockImplementation(sessionWithSaved(1));
     const { findByText } = renderProviders();
     await findByText("user:1");
-    act(() => ctx.addSavedApp({ id: 5, name: "UC San Diego" }));
+    await waitFor(() => expect(ctx.savedApps).toHaveLength(1));
 
+    global.fetch.mockImplementation((url) =>
+      url.endsWith("/api/reminders") ? jsonResponse([]) : jsonResponse({ authenticated: true, userId: 2 })
+    );
     act(() => ctx.setMe({ authenticated: true, userId: 2 }));
 
     expect(await findByText("user:2")).toBeTruthy();

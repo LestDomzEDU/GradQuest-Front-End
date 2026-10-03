@@ -7,10 +7,14 @@ const mockNavigate = jest.fn();
 let mockRouteParams = {};
 let mockMe = { authenticated: true };
 
-jest.mock("@react-navigation/native", () => ({
-  useNavigation: () => ({ navigate: mockNavigate }),
-  useRoute: () => ({ params: mockRouteParams }),
-}));
+jest.mock("@react-navigation/native", () => {
+  const React = require("react");
+  return {
+    useNavigation: () => ({ navigate: mockNavigate }),
+    useRoute: () => ({ params: mockRouteParams }),
+    useFocusEffect: (effect) => React.useEffect(effect, [effect]),
+  };
+});
 
 jest.mock("../../context/AuthContext", () => ({
   useAuth: () => ({ me: mockMe }),
@@ -83,5 +87,33 @@ describe("DashboardScreen", () => {
     expect(remove[0]).toMatch(/\/api\/reminders\/school\/3$/);
     expect(remove[1]).toMatchObject({ method: "DELETE" });
     expect(fetchedUrls().join(" ")).not.toMatch(/userId/);
+  });
+
+  test("schools already saved on the backend show Remove", async () => {
+    mockMe = { authenticated: true, userId: 1 };
+    mockRouteParams = { topSchools: [{ id: 3, name: "Georgia Tech" }, { id: 4, name: "Rice" }] };
+    global.fetch.mockImplementation((url) =>
+      url.endsWith("/api/reminders")
+        ? okJson([{ id: 10, schoolId: 3, schoolName: "Georgia Tech" }])
+        : okJson({})
+    );
+    const { findByText, getAllByText } = renderDashboard();
+
+    expect(await findByText("Remove")).toBeTruthy();
+    expect(getAllByText("Save")).toHaveLength(1);
+  });
+
+  test("a failed save rolls back and shows an error", async () => {
+    mockRouteParams = { topSchools: [{ id: 3, name: "Georgia Tech" }] };
+    global.fetch.mockImplementation(() =>
+      Promise.resolve({ ok: false, status: 400, json: () => Promise.resolve({}) })
+    );
+    const { getByText, findByText, queryByText } = renderDashboard();
+
+    fireEvent.press(getByText("Save"));
+
+    expect(await findByText("We couldn't save that school. Please try again.")).toBeTruthy();
+    expect(getByText("Save")).toBeTruthy();
+    expect(queryByText("Remove")).toBeNull();
   });
 });

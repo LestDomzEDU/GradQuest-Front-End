@@ -8,6 +8,7 @@ import {
   Linking,
   Image,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSavedApps } from "../context/SavedAppsContext";
 
 const PALETTE = {
@@ -20,7 +21,21 @@ const PALETTE = {
 };
 
 export default function SavedApplicationsScreen() {
-  const { savedApps, removeSavedApp } = useSavedApps();
+  const { savedApps, removeSchool, reloadSaved } = useSavedApps();
+  const [removeError, setRemoveError] = React.useState<string | null>(null);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      reloadSaved();
+    }, [reloadSaved])
+  );
+
+  const onRemove = async (id: number) => {
+    setRemoveError(null);
+    if (!(await removeSchool(id))) {
+      setRemoveError("We couldn't remove that school. Please try again.");
+    }
+  };
 
   const renderItem = ({ item }) => (
     <View style={s.card}>
@@ -41,7 +56,8 @@ export default function SavedApplicationsScreen() {
       {/* Remove Button */}
       <Pressable
         style={s.removeBtn}
-        onPress={() => removeSavedApp(item.id)}
+        onPress={() => onRemove(item.id)}
+        accessibilityLabel={`Remove ${item.name}`}
       >
         <Text style={s.removeBtnText}>Remove</Text>
       </Pressable>
@@ -60,7 +76,13 @@ export default function SavedApplicationsScreen() {
         />
       </View>
       <View style={s.headerAccent} />
-      
+
+      {removeError ? (
+        <Text style={s.errorText} accessibilityRole="alert">
+          {removeError}
+        </Text>
+      ) : null}
+
       {savedApps.length === 0 ? (
         <View style={s.emptyContainer}>
           <Text style={s.emptyTitle}>No Saved Applications</Text>
@@ -70,7 +92,7 @@ export default function SavedApplicationsScreen() {
         <FlatList
           contentContainerStyle={{ padding: 16 }}
           data={savedApps}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => String(item.id)}
           renderItem={renderItem}
         />
       )}
@@ -107,6 +129,12 @@ const s = StyleSheet.create({
     fontSize: 24,
     fontWeight: "800",
     color: PALETTE.blueDark,
+  },
+  errorText: {
+    color: "#B00020",
+    fontWeight: "600",
+    paddingHorizontal: 16,
+    paddingTop: 12,
   },
   emptyContainer: {
     padding: 40,
