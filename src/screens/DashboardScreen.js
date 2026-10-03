@@ -19,7 +19,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useSavedApps } from "../context/SavedAppsContext";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
-import API from "../lib/api";
+import { apiFetch } from "../lib/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const PALETTE = {
@@ -67,7 +67,7 @@ export default function DashboardScreen() {
   const { savedApps, addSavedApp, removeSavedApp } = useSavedApps();
 
   // Auth + preference-based recommendations
-  const { me, refresh } = useAuth();
+  const { me } = useAuth();
 
   // Any top schools passed in via navigation (e.g., after saving preferences)
   const routeTopSchools = route?.params?.topSchools ?? null;
@@ -97,30 +97,12 @@ export default function DashboardScreen() {
       }
 
       try {
-        setLoadingTop(true);
-
-        let currentMe = me;
-        // Make sure we have an up-to-date user object
-        if (
-          (!currentMe ||
-            !currentMe.authenticated ||
-            (!currentMe.userId && !currentMe.id)) &&
-          typeof refresh === "function"
-        ) {
-          try {
-            currentMe = await refresh();
-          } catch (e) {
-            console.warn("Dashboard: failed to refresh auth", e);
-          }
-        }
-
-        const userId = currentMe?.userId || currentMe?.id;
-        if (!userId) {
+        if (!me?.authenticated) {
           return;
         }
+        setLoadingTop(true);
 
-        const url = `${API.BASE}/api/schools/top5?userId=${userId}`;
-        const res = await fetch(url, { credentials: "include" });
+        const res = await apiFetch("/api/schools/top5");
 
         if (!res.ok) {
           const text = await res.text().catch(() => "");
@@ -152,7 +134,7 @@ export default function DashboardScreen() {
     return () => {
       cancelled = true;
     };
-  }, [me, refresh, routeTopSchools]);
+  }, [me, routeTopSchools]);
 
   // Prefer top schools from profile preferences; fall back to saved apps
   const dataToShow =
@@ -239,23 +221,8 @@ export default function DashboardScreen() {
   // functio to create reminder in database when saving a school
   const createReminder = async (schoolId) => {
     try {
-      let currentMe = me;
-      if (!currentMe || !currentMe.authenticated || (!currentMe.userId && !currentMe.id)) {
-        if (typeof refresh === "function") {
-          currentMe = await refresh();
-        }
-      }
-
-      const userId = currentMe?.userId || currentMe?.id;
-      if (!userId) {
-        console.warn("Cannot create reminder: user not authenticated");
-        return;
-      }
-
-      const url = `${API.BASE}/api/reminders?userId=${userId}&schoolId=${schoolId}`;
-      const res = await fetch(url, {
+      const res = await apiFetch(`/api/reminders?schoolId=${schoolId}`, {
         method: "POST",
-        credentials: "include",
       });
 
       if (!res.ok) {
@@ -270,23 +237,8 @@ export default function DashboardScreen() {
   // delete reminder from database when removing a school
   const deleteReminder = async (schoolId) => {
     try {
-      let currentMe = me;
-      if (!currentMe || !currentMe.authenticated || (!currentMe.userId && !currentMe.id)) {
-        if (typeof refresh === "function") {
-          currentMe = await refresh();
-        }
-      }
-
-      const userId = currentMe?.userId || currentMe?.id;
-      if (!userId) {
-        console.warn("Cannot delete reminder: user not authenticated");
-        return;
-      }
-
-      const url = `${API.BASE}/api/reminders/school/${schoolId}?userId=${userId}`;
-      const res = await fetch(url, {
+      const res = await apiFetch(`/api/reminders/school/${schoolId}`, {
         method: "DELETE",
-        credentials: "include",
       });
 
       if (!res.ok) {

@@ -1,85 +1,48 @@
 import React from "react";
-import renderer from "react-test-renderer";
+import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import SettingsScreen from "../SettingsScreen";
 
-// Mock the AuthContext used by SettingsScreen
-jest.mock("../../context/AuthContext", () => ({
-  useAuth: jest.fn(),
-}));
+const mockNavigate = jest.fn();
+const mockRefresh = jest.fn(() => Promise.resolve());
+let mockMe = null;
 
-// Mock react-navigation's useNavigation used inside the component
-jest.mock("@react-navigation/native", () => ({
-  useNavigation: jest.fn(),
+jest.mock("@react-navigation/native", () => {
+  const React = require("react");
+  return {
+    useNavigation: () => ({ navigate: mockNavigate, reset: jest.fn() }),
+    useRoute: () => ({ params: {} }),
+    useFocusEffect: (effect) => React.useEffect(effect, [effect]),
+  };
+});
+
+jest.mock("../../context/AuthContext", () => ({
+  useAuth: () => ({ me: mockMe, refresh: mockRefresh }),
 }));
 
 describe("SettingsScreen", () => {
-  let mockNavigate;
-  let useAuth;
-  let useNavigation;
-
   beforeEach(() => {
-    // require the mocked modules so we can control return values
-    useAuth = require("../../context/AuthContext").useAuth;
-    useNavigation = require("@react-navigation/native").useNavigation;
-
-    mockNavigate = jest.fn();
-
-    // default mock implementations
-    useNavigation.mockReturnValue({ navigate: mockNavigate });
-    useAuth.mockReturnValue({
-      me: {
-        name: "Test User",
-        login: "testuser",
-        avatar_url: "https://example.com/avatar.png",
-      },
-      setMe: jest.fn(),
-      refresh: jest.fn(),
-    });
+    mockNavigate.mockClear();
+    mockRefresh.mockClear();
   });
 
-  afterEach(() => {
-    jest.resetAllMocks();
+  it("shows a loading label instead of 'Unknown User' before /api/me loads", () => {
+    mockMe = null;
+    const { getByText, queryByText } = render(<SettingsScreen />);
+    expect(getByText("Loading…")).toBeTruthy();
+    expect(queryByText("Unknown User")).toBeNull();
   });
 
-  it("renders correctly (snapshot)", () => {
-    const tree = renderer.create(<SettingsScreen />).toJSON();
-    expect(tree).toMatchSnapshot();
+  it("shows the signed-in user's name and refreshes on focus", async () => {
+    mockMe = { authenticated: true, name: "Test User", login: "testuser" };
+    const { getByText } = render(<SettingsScreen />);
+    expect(getByText("Test User")).toBeTruthy();
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
   });
 
-  it("shows the logged-in user's name", () => {
-    const rendered = renderer.create(<SettingsScreen />);
-    const root = rendered.root;
-
-    const nameNodes = root.findAll(
-      (node) =>
-        node.type === "Text" &&
-        node.props &&
-        (node.props.children === "Test User" ||
-          node.props.children === "testuser")
-    );
-
-    expect(nameNodes.length).toBeGreaterThan(0);
-  });
-
-  it("navigates to ProfileIntake when preferences row is pressed", () => {
-    const rendered = renderer.create(<SettingsScreen />);
-    const root = rendered.root;
-
-    // Find the Pressable/Touchable with the accessibilityLabel used in the component
-    const prefRow = root.findAll(
-      (node) =>
-        node.props &&
-        node.props.accessibilityLabel === "Open preferences and see top schools"
-    )[0];
-
-    expect(prefRow).toBeDefined();
-    // simulate press
-    if (typeof prefRow.props.onPress === "function") {
-      prefRow.props.onPress();
-    } else if (typeof prefRow.props.onClick === "function") {
-      prefRow.props.onClick();
-    }
-
-    expect(mockNavigate).toHaveBeenCalledWith("ProfileIntake");
+  it("navigates to ProfileIntake from Adjust Preferences", async () => {
+    mockMe = { authenticated: true, name: "Test User" };
+    const { getByText } = render(<SettingsScreen />);
+    fireEvent.press(getByText("Adjust Preferences"));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("ProfileIntake"));
   });
 });

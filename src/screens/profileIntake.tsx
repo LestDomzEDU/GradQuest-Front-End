@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NavigationProp } from "@react-navigation/native";
-import API from "../lib/api";
+import { apiFetch } from "../lib/api";
 
 import { useAuth } from "../context/AuthContext";
 
@@ -158,7 +158,7 @@ const MajorSelectField: React.FC<SelectFieldProps> = ({
 
 export default function ProfileIntake() {
   const navigation = useNavigation<NavigationProp<RootNavParamList>>();
-  const { me, refresh } = useAuth();
+  const { me } = useAuth();
 
   const [budget, setBudget] = React.useState<number>(0);
   const [budgetText, setBudgetText] = React.useState<string>("");
@@ -224,31 +224,15 @@ export default function ProfileIntake() {
     let mounted = true;
     const loadPrefs = async () => {
       try {
-        let currentMe = me;
-        if (
-          (!currentMe || !currentMe.authenticated) &&
-          typeof refresh === "function"
-        ) {
-          try {
-            currentMe = await refresh();
-          } catch (e) {}
-        }
-        const userId = currentMe?.userId || currentMe?.id;
-        if (!userId) return;
+        if (!me?.authenticated) return;
 
-        const tryUrls = [
-          `${API.BASE}/api/preferences?userId=${userId}`,
-          `${API.BASE}/api/preferences?studentId=${userId}`,
-        ];
-
-        for (const url of tryUrls) {
+        for (const path of ["/api/preferences"]) {
           try {
-            const res = await fetch(url, { credentials: "include" });
+            const res = await apiFetch(path);
             if (!res.ok) continue;
             const prefs = await res.json();
             if (!prefs || !mounted) continue;
 
-            console.log("Pref GET raw JSON:", prefs);
             const raw = prefs?.preference || prefs?.data || prefs || {};
 
             if (raw.budget !== undefined && raw.budget !== null) {
@@ -308,7 +292,7 @@ export default function ProfileIntake() {
     return () => {
       mounted = false;
     };
-  }, [me, refresh]);
+  }, [me]);
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -317,30 +301,6 @@ export default function ProfileIntake() {
       const parsedGpa = parseFloat(gpaText);
       const finalBudget = Number.isFinite(parsedBudget) ? parsedBudget : 0;
       const finalGpa = Number.isFinite(parsedGpa) ? parsedGpa : 0;
-
-      let currentMe = me;
-      if (!me || !me.authenticated || (!me.userId && !me.id)) {
-        console.log("Auth context not loaded, refreshing...");
-        try {
-          const refreshed = (await refresh()) as any;
-          if (refreshed && (refreshed.userId || refreshed.id)) {
-            currentMe = refreshed;
-          }
-        } catch (e) {
-          console.warn("Failed to refresh auth:", e);
-        }
-        console.log("Refreshed me object:", JSON.stringify(currentMe, null, 2));
-      }
-
-      const userId = currentMe?.userId || currentMe?.id;
-      if (!userId) {
-        throw new Error("User not authenticated. Please log in first.");
-      }
-      const userIdNum = Number(userId);
-      if (!Number.isFinite(userIdNum)) {
-        throw new Error(`Invalid userId: ${userId} (expected a number)`);
-      }
-      console.log("Using userId:", userIdNum);
 
       const prefPayload: any = {
         budget: finalBudget,
@@ -363,23 +323,14 @@ export default function ProfileIntake() {
         requirementType: capstone ? "CAPSTONE" : "NEITHER",
       };
 
-      console.log(
-        "Sending preferences payload:",
-        JSON.stringify(prefPayload, null, 2),
-      );
-
-      const saveUrl = `${API.BASE}/api/preferences?userId=${userIdNum}`;
-      console.log("POST to:", saveUrl);
-      const saveRes = await fetch(saveUrl, {
+      const saveRes = await apiFetch("/api/preferences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(prefPayload),
       });
 
       if (!saveRes.ok) {
         const text = await saveRes.text().catch(() => "");
-        console.error("Backend response:", saveRes.status, text);
         throw new Error(
           `Failed to save preferences: ${saveRes.status} ${text}`,
         );
@@ -438,8 +389,7 @@ export default function ProfileIntake() {
       if (effective.targetCountry) setCountry(effective.targetCountry);
 
       // 4) Get top schools from the backend API.
-      const topUrl = `${API.BASE}/api/schools/top5?userId=${userId}`;
-      const topRes = await fetch(topUrl, { credentials: "include" });
+      const topRes = await apiFetch("/api/schools/top5");
       if (!topRes.ok) {
         const text = await topRes.text().catch(() => "");
         throw new Error(`Failed to fetch top schools: ${topRes.status} ${text}`);
