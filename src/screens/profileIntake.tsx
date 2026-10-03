@@ -191,33 +191,6 @@ export default function ProfileIntake() {
   const formatOptions = ["In person", "Hybrid", "Online"];
   const majorOptions = ["Math", "English", "Computer Science"];
 
-  const isTest = typeof process !== "undefined" && !!process.env.JEST_WORKER_ID;
-  if (isTest) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Profile Intake</Text>
-        <Text style={styles.subtitle}>
-          Tell us about your application preferences
-        </Text>
-        <View style={styles.field}>
-          <Text style={styles.label}>Budget (USD)</Text>
-          <TextInput
-            accessibilityLabel="Budget (USD)"
-            style={styles.input}
-            value={budgetText}
-            onChangeText={setBudgetText}
-          />
-        </View>
-        <Pressable
-          style={styles.button}
-          onPress={() => navigation.navigate("Tabs")}
-        >
-          <Text style={styles.buttonText}>Save profile</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
   const [submitting, setSubmitting] = React.useState(false);
 
   React.useEffect(() => {
@@ -435,6 +408,7 @@ export default function ProfileIntake() {
           <View style={styles.field}>
             <Text style={styles.label}>Budget (USD)</Text>
             <TextInput
+              accessibilityLabel="Budget (USD)"
               style={styles.input}
               keyboardType="numeric"
               value={budgetText}
@@ -458,6 +432,7 @@ export default function ProfileIntake() {
           <View style={styles.field}>
             <Text style={styles.label}>Expected Graduation Date</Text>
             <TextInput
+              accessibilityLabel="Expected Graduation Date"
               style={styles.input}
               placeholder="YYYY-MM-DD"
               value={gradDate}
@@ -510,6 +485,7 @@ export default function ProfileIntake() {
           <View style={styles.field}>
             <Text style={styles.label}>GPA (e.g., 3.5)</Text>
             <TextInput
+              accessibilityLabel="GPA"
               style={styles.input}
               keyboardType="decimal-pad"
               value={gpaText}
