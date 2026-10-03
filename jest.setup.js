@@ -19,11 +19,14 @@ jest.mock("@react-navigation/native", () => {
 
 // Mock StatusBar to prevent clearImmediate issues
 jest.mock("react-native/Libraries/Components/StatusBar/StatusBar", () => {
-  const React = require("react");
-  return {
-    __esModule: true,
-    default: jest.fn(() => null),
-  };
+  // react-native's index uses this module directly as the component.
+  const StatusBar = jest.fn(() => null);
+  StatusBar.default = StatusBar;
+  StatusBar.setBarStyle = jest.fn();
+  StatusBar.setBackgroundColor = jest.fn();
+  StatusBar.setHidden = jest.fn();
+  StatusBar.setTranslucent = jest.fn();
+  return StatusBar;
 });
 
 // Suppress console warnings in tests
