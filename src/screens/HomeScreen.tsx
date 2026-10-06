@@ -8,7 +8,7 @@ import {
   StatusBar,
   Image,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 
 const PALETTE = {
   blueDark: "#053F7C",
@@ -21,6 +21,8 @@ const PALETTE = {
 
 export default function HomeScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const sessionExpired = (route?.params as any)?.sessionExpired === true;
 
   const goToOAuth = () => navigation.navigate("OAuth" as never);
 
@@ -41,6 +43,12 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.headerAccent} />
+
+      {sessionExpired ? (
+        <Text style={styles.noticeText} accessibilityRole="alert">
+          Your session has ended. Please sign in again.
+        </Text>
+      ) : null}
 
       <View style={styles.infoCard}>
         <Text style={styles.infoText}>
@@ -88,6 +96,16 @@ const styles = StyleSheet.create({
     width: 250,
     height: 250,
     resizeMode: "contain",
+  },
+
+  noticeText: {
+    backgroundColor: "#FFF5F6",
+    color: "#B00020",
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "center",
   },
 
   infoCard: {

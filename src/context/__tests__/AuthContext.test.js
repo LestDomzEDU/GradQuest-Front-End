@@ -3,6 +3,7 @@ import { Text } from "react-native";
 import { render, act, waitFor } from "@testing-library/react-native";
 import { AuthProvider, useAuth } from "../AuthContext";
 import { SavedAppsProvider, useSavedApps } from "../SavedAppsContext";
+import { apiFetch } from "../../lib/api";
 
 const jsonResponse = (body) =>
   Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
@@ -62,6 +63,32 @@ describe("AuthContext", () => {
 
     await act(() => ctx.logout());
     expect(await findByText("signed-out")).toBeTruthy();
+  });
+
+  it("a 401 from the API signs the user out, marks the session expired and clears saved schools", async () => {
+    global.fetch.mockImplementation(sessionWithSaved(1));
+    const { findByText } = renderProviders();
+    await findByText("user:1");
+    await waitFor(() => expect(ctx.savedApps).toHaveLength(1));
+
+    global.fetch.mockImplementation(() => Promise.resolve({ ok: false, status: 401 }));
+    await act(() => apiFetch("/api/schools/top5"));
+
+    expect(await findByText("signed-out")).toBeTruthy();
+    expect(ctx.me).toEqual({ authenticated: false, sessionExpired: true });
+    expect(ctx.savedApps).toHaveLength(0);
+  });
+
+  it("a 401 while already signed out does not mark the session expired", async () => {
+    global.fetch.mockImplementation(() => jsonResponse({ authenticated: false }));
+    const { findByText } = renderProviders();
+    await findByText("signed-out");
+    await waitFor(() => expect(ctx.me).toEqual({ authenticated: false }));
+
+    global.fetch.mockImplementation(() => Promise.resolve({ ok: false, status: 401 }));
+    await act(() => apiFetch("/api/preferences"));
+
+    expect(ctx.me).toEqual({ authenticated: false });
   });
 
   it("switching accounts drops the previous user's saved schools", async () => {

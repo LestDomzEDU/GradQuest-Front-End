@@ -36,12 +36,29 @@ const API = {
   BASE: BASE_URL,
 };
 
+let unauthorizedHandler = null;
+
+/**
+ * Register a callback for 401 responses from apiFetch (the session is gone).
+ * Returns a function that unregisters it.
+ */
+export function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = null;
+  };
+}
+
 /**
  * fetch() against the backend with the session cookie attached.
  * The backend identifies the user from the session, so never pass a userId.
  */
-export function apiFetch(path, options = {}) {
-  return fetch(`${BASE_URL}${path}`, { credentials: "include", ...options });
+export async function apiFetch(path, options = {}) {
+  const res = await fetch(`${BASE_URL}${path}`, { credentials: "include", ...options });
+  if (res.status === 401 && unauthorizedHandler) {
+    unauthorizedHandler();
+  }
+  return res;
 }
 
 export default API;

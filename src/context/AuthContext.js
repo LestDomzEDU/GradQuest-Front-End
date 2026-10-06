@@ -1,8 +1,9 @@
 // src/context/AuthContext.js
 import React, { createContext, useContext, useState, useCallback } from "react";
-import API from "../lib/api";
+import API, { setUnauthorizedHandler } from "../lib/api";
 
 // `me` is null until the first /api/me response arrives, then an object with `authenticated`.
+// `sessionExpired` is set when a signed-in user gets a 401.
 const AuthContext = createContext({
   me: null,
   setMe: () => {},
@@ -37,6 +38,17 @@ export const AuthProvider = ({ children }) => {
   React.useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // A 401 from any API call means the session ended (expired, or the backend restarted).
+  React.useEffect(
+    () =>
+      setUnauthorizedHandler(() => {
+        setMe((prev) =>
+          prev?.authenticated ? { authenticated: false, sessionExpired: true } : prev
+        );
+      }),
+    []
+  );
 
   return (
     <AuthContext.Provider value={{ me, setMe, refresh, logout }}>
