@@ -14,6 +14,7 @@ jest.mock("react-native-webview", () => ({ WebView: () => null }));
 jest.mock("../../lib/api", () => ({
   __esModule: true,
   apiFetch: (path, options = {}) => global.fetch(`http://api.test${path}`, { credentials: "include", ...options }),
+  setUnauthorizedHandler: () => () => {},
   default: {
     ME: "http://api.test/api/me",
     LOGOUT: "http://api.test/api/logout",
